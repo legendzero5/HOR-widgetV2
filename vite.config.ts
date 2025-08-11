@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => {
         scss: {}, // dukung .scss
       },
     },
-
+    base: './',
     build: {
       outDir: 'dist',
       minify: 'terser', // mirip UglifyJs

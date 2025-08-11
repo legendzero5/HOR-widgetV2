@@ -1,7 +1,7 @@
 
 
 import BookingWidget from './components/BookingWidget'
-import './styles/globals.css'
+// import './styles/globals.css'
 
 interface AppProps {
   propertyId: string | null;

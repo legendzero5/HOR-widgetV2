@@ -147,9 +147,18 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
     const [totalPrice, setTotalPrice] = useState(0)
 
     const selectRoom = (room: Rooms) => {
-        setBooking((prev) => ({ ...prev, selectedRoom: room }))
-    }
+        setBooking((prev) => ({
+            ...prev,
+            selectedRoom: prev.selectedRoom?.id === room.id ? null : room
+        }));
+    };
+
     const totalGuests = booking.adults + booking.children;
+
+    const isBookingAllowed =
+        !!booking.dateRange?.from &&
+        !!booking.dateRange?.to &&
+        (booking.adults + booking.children) > 0;
 
     useEffect(() => {
         if (!propertyId) return
@@ -162,7 +171,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
 
         setLoading(true)
 
-        fetch(`http://localhost:5900/v1/rooms/available?${query.toString()}`)
+        fetch(`https://api.houseofreservations.com/v1/rooms/available?${query.toString()}`)
             .then((res) => res.json())
             .then((data) => {
                 setRooms(data.data || [])
@@ -224,7 +233,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
         try {
             setLoading(true);
 
-            const response = await fetch(`http://localhost:5900/v1/rooms/available?${queryParams.toString()}`);
+            const response = await fetch(`https://api.houseofreservations.com/v1/rooms/available?${queryParams.toString()}`);
             const result = await response.json();
 
             setRooms(result.data || []);
@@ -243,7 +252,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
 
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-[2000px] bg-gray-50">
             {/* Header */}
             {/* <div className="bg-white shadow-sm border-b">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -417,7 +426,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                 {/* Search Icon - Positioned absolutely inside the search bar */}
                                 <Button
                                     onClick={() => handleSearchClick()}
-                                    className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-[#9CAF88] hover:bg-[#8A9B7A] text-white rounded-full p-3 h-12 w-12 flex items-center justify-center transition-colors duration-200 shadow-sm"
+                                    className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-[#5c8252] hover:bg-[#8A9B7A] text-white rounded-full p-3 h-12 w-12 flex items-center justify-center transition-colors duration-200 shadow-sm"
                                 >
                                     <svg
                                         className="h-5 w-5"
@@ -531,10 +540,11 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
 
                                                     <Button
                                                         onClick={() => selectRoom(room)}
+                                                        disabled={!isBookingAllowed}
                                                         className={`w-full ${booking.selectedRoom?.id === room.id
                                                             ? "bg-green-600 hover:bg-green-700"
                                                             : ""
-                                                            }`}
+                                                            } ${!isBookingAllowed ? "opacity-50 cursor-not-allowed" : ""}`}
                                                     >
                                                         {booking.selectedRoom?.id === room.id ? (
                                                             <>
@@ -545,6 +555,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                                             "Select Villa"
                                                         )}
                                                     </Button>
+
                                                 </div>
                                             </div>
                                         </CardContent>
@@ -570,9 +581,13 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                             {/* Selected Villa */}
                                             <div>
                                                 <h4 className="font-medium text-gray-900 mb-2">Selected Villa</h4>
-                                                <div className="bg-blue-50 rounded-lg p-3">
-                                                    <p className="font-medium text-blue-900">{booking.selectedRoom.room_name}</p>
-                                                    <p className="text-sm text-blue-700">${booking.selectedRoom.rates} per night</p>
+                                                <div className="bg-blue-50 rounded-lg py-3">
+                                                    <p className="font-medium ">{booking.selectedRoom.room_name}</p>
+                                                    <p className="text-sm ">
+                                                        {formatCurrency(
+                                                            booking.selectedRoom.rates
+                                                        )} per night
+                                                    </p>
                                                 </div>
                                             </div>
 
@@ -611,9 +626,15 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                                 <div className="space-y-2">
                                                     <div className="flex justify-between text-sm">
                                                         <span className="text-gray-600">
-                                                            ${booking.selectedRoom.rates} × {nights} nights
+                                                            {formatCurrency(
+                                                                booking.selectedRoom.rates
+                                                            )}  × {nights} nights
                                                         </span>
-                                                        <span className="font-medium">${totalPrice}</span>
+                                                        <span className="font-medium">
+                                                            {formatCurrency(
+                                                                totalPrice
+                                                            )}
+                                                        </span>
                                                     </div>
                                                     <div className="flex justify-between text-sm">
                                                         <span className="text-gray-600">Taxes & fees</span>
