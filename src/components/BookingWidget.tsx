@@ -1,29 +1,20 @@
 
-import { useState, useEffect } from "react"
-import { Calendar, Users, Bed, Check } from "lucide-react"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { Calendar, Users, Bed, Check, ChevronDown, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Separator } from "@/components/ui/separator"
-import { format, differenceInDays } from "date-fns"
+import { format, differenceInDays, addDays } from "date-fns"
 import type { DateRange } from "react-day-picker"
+import "react-datepicker/dist/react-datepicker.css"
+import CustomDatePicker from "./CustomDatePicker"
+import BookingGuests from "./GuestPickerSection"
+import BookingDatePicker from "./DatePickerSection"
+import type { PropertyAvailabilityResponse, RawPropertyAvailability } from "@/types/types"
 // import { useAvailableRooms } from "@/lib/useAvailableRooms"
 
-// interface Room {
-//     id: string
-//     name: string
-//     description: string
-//     image: string
-//     price: number
-//     originalPrice?: number
-//     maxGuests: number
-//     size: string
-//     amenities: string[]
-//     features: string[]
-//     isPopular?: boolean
-// }
 interface Rooms {
     id: number
     room_id: string
@@ -57,11 +48,10 @@ interface Rooms {
         coverImage: string
         published: boolean
     }
+    // room_availability?: { date: string }[]
+
 }
-
-
-// Gunakan ini untuk konsisten
-interface BookingData {
+export interface BookingData {
     dateRange: DateRange | undefined
     adults: number // usia 13+
     children: number // usia <13
@@ -69,71 +59,68 @@ interface BookingData {
     selectedRoom: Rooms | null
 }
 
+export type DateForRange = [Date | null, Date | null];
 
-// const rooms2: Room[] = [
-//     {
-//         id: "1",
-//         name: "Villa Eyla",
-//         description: "Luxurious villa with stunning rice field views and private pool",
-//         image: "/luxury-bali-villa-pool.png",
-//         price: 450,
-//         originalPrice: 520,
-//         maxGuests: 6,
-//         size: "120 m²",
-//         amenities: ["Private Pool", "Rice Field View", "Full Kitchen", "Garden"],
-//         features: ["Free WiFi", "Daily Cleaning", "Air Conditioning", "Safe"],
-//         isPopular: true,
-//     },
-//     {
-//         id: "2",
-//         name: "Villa Akella",
-//         description: "Modern tropical villa with open-air design and infinity pool",
-//         image: "/placeholder-2jdy2.png",
-//         price: 380,
-//         maxGuests: 4,
-//         size: "95 m²",
-//         amenities: ["Infinity Pool", "Open Air Design", "Tropical Garden", "BBQ Area"],
-//         features: ["Free WiFi", "Daily Cleaning", "Air Conditioning", "Safe"],
-//     },
-//     {
-//         id: "3",
-//         name: "Bedouin House",
-//         description: "Unique bohemian-style accommodation with authentic Balinese charm",
-//         image: "/bohemian-bedouin-house-bali.png",
-//         price: 280,
-//         originalPrice: 320,
-//         maxGuests: 3,
-//         size: "70 m²",
-//         amenities: ["Bohemian Style", "Authentic Design", "Private Terrace", "Yoga Space"],
-//         features: ["Free WiFi", "Daily Cleaning", "Fan Cooling", "Safe"],
-//     },
-//     {
-//         id: "4",
-//         name: "7 Seas Bingin",
-//         description: "Beachfront villa with direct access to pristine Bingin Beach",
-//         image: "/beachfront-villa-bingin-bali.png",
-//         price: 650,
-//         maxGuests: 8,
-//         size: "180 m²",
-//         amenities: ["Beach Access", "Ocean View", "Private Beach", "Surf Spot"],
-//         features: ["Free WiFi", "Daily Cleaning", "Air Conditioning", "Safe"],
-//     },
-// ]
+
 
 export default function BookingWidget({ propertyId }: { propertyId: string | null }) {
     const [booking, setBooking] = useState<BookingData>({
-        dateRange: undefined,
+        dateRange: {
+            from: new Date(),
+            to: addDays(new Date(), 2),
+        },
         adults: 2,
         children: 0,
         rooms: 1,
         selectedRoom: null,
     });
 
+    const [dateRange, setDateRange] = useState<DateForRange>([null, null]);
+    const [startDate, endDate] = dateRange;
+    const [isOpen, setIsOpen] = useState(true); // untuk hamburger menu
+    const [searchDone, setSearchDone] = useState(false);
     const [rooms, setRooms] = useState<Rooms[]>([])
     // const [filteredRooms, setFilteredRooms] = useState<Rooms[]>([]);
-
+    const [availableDates, setAvailableDates] = useState<Date[]>([]);
+    const [availabilityData, setAvailabilityData] = useState<RawPropertyAvailability[]>([]);
     const [loading, setLoading] = useState(true);
+    const [showSticky, setShowSticky] = useState(false);
+    // const [minStay, setMinStay] = useState<number | null>(null);
+    const [searchParams, setSearchParams] = useState<null | {
+        arrival: string;
+        departure: string;
+    }>(null);
+    const summaryRef = useRef<HTMLDivElement | null>(null);
 
+    // Show sticky summary only when villa selected
+    useEffect(() => {
+        setShowSticky(!!booking.selectedRoom);
+    }, [booking.selectedRoom]);
+
+    // IntersectionObserver for hide sticky
+    useEffect(() => {
+        const target = summaryRef.current;
+        if (!target) return;
+
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    // Hilangkan sticky kalau element terlihat
+                    setShowSticky(false);
+                } else if (booking.selectedRoom) {
+                    // Tampilkan sticky kalau villa dipilih tapi element tidak terlihat
+                    setShowSticky(true);
+                }
+            },
+            { threshold: 0.1 } // 10% terlihat saja sudah dianggap muncul
+        );
+
+        observer.observe(target);
+
+        return () => observer.disconnect();
+    }, [booking.selectedRoom]);
+
+    // Format Currency
     const formatCurrency = (amount: number) => {
         if (typeof amount !== 'number') return 'N/A';
         return new Intl.NumberFormat('id-ID', {
@@ -144,7 +131,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
     };
 
     const [nights, setNights] = useState(0)
-    const [totalPrice, setTotalPrice] = useState(0)
+    // const [totalPrice, setTotalPrice] = useState(0)
 
     const selectRoom = (room: Rooms) => {
         setBooking((prev) => ({
@@ -153,17 +140,49 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
         }));
     };
 
-    const totalGuests = booking.adults + booking.children;
+    // const totalGuests = booking.adults + booking.children;
 
     const isBookingAllowed =
         !!booking.dateRange?.from &&
         !!booking.dateRange?.to &&
         (booking.adults + booking.children) > 0;
 
+
+
+
+    // Fetch availability sekali di awal
+    useEffect(() => {
+        if (!propertyId) return;
+        const fetchAvailability = async () => {
+            try {
+                setLoading(true);
+                const url = `http://localhost:5900/v1/properties/${propertyId}/availability`;
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data: PropertyAvailabilityResponse = await res.json();
+
+                setAvailabilityData(data.availability);
+                setAvailableDates(
+                    data.availability
+                        .filter(item => item.numAvail > 0)
+                        .map(item => new Date(item.date))
+                );
+            } catch (err) {
+                console.error("Fetch availability error:", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchAvailability();
+    }, [propertyId]);
+
+
+
+
     useEffect(() => {
         if (!propertyId) return
-        console.log(`Booking from : ${booking.dateRange?.from}`);
-        console.log(`Booking to : ${booking.dateRange?.to}`);
+        // console.log(`Booking from : ${booking.dateRange?.from}`);
+        // console.log(`Booking to : ${booking.dateRange?.to}`);
 
         const query = new URLSearchParams({
             propertyId,
@@ -171,7 +190,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
 
         setLoading(true)
 
-        fetch(`https://api.houseofreservations.com/v1/rooms/available?${query.toString()}`)
+        fetch(`http://localhost:5900/v1/rooms/available?${query.toString()}`)
             .then((res) => res.json())
             .then((data) => {
                 setRooms(data.data || [])
@@ -190,69 +209,80 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
         if (booking.dateRange?.from && booking.dateRange?.to && booking.selectedRoom) {
             const nightsCount = differenceInDays(booking.dateRange.to, booking.dateRange.from)
             setNights(nightsCount)
-            setTotalPrice(nightsCount * booking.selectedRoom.rates * booking.rooms)
+            // setTotalPrice(nightsCount * booking.selectedRoom.rates * booking.rooms)
         } else {
             setNights(0)
-            setTotalPrice(0)
+            // setTotalPrice(0)
         }
     }, [booking.dateRange, booking.selectedRoom, booking.rooms])
 
-    const handleBooking = () => {
-        if (!booking.selectedRoom || !booking.dateRange?.from || !booking.dateRange?.to) {
-            alert("Please select room and dates")
-            return
-        }
 
-        alert(
-            `Booking confirmed for ${booking.selectedRoom.room_name}!\nCheck-in: ${format(booking.dateRange.from, "MMM dd, yyyy")}\nCheck-out: ${format(booking.dateRange.to, "MMM dd, yyyy")}\nTotal: $${totalPrice}`,
-        )
-    }
-
-    const handleSearchClick = async () => {
+    // Click handler ringan
+    const handleSearchClick = useCallback(() => {
         if (!booking.dateRange?.from || !booking.dateRange?.to) {
             alert("Please select dates to search");
             return;
         }
+        setSearchDone(false);
+        setSearchParams({
+            arrival: format(booking.dateRange.from, "yyyy-MM-dd"),
+            departure: format(booking.dateRange.to, "yyyy-MM-dd"),
+        });
+    }, [booking.dateRange]);
 
-        const arrival = format(booking.dateRange.from, "yyyy-MM-dd");
-        const departure = format(booking.dateRange.to, "yyyy-MM-dd");
+    // Effect terpisah untuk fetch rooms
+    useEffect(() => {
+        if (!searchParams || !propertyId) return;
+        const fetchRooms = async () => {
+            try {
+                setLoading(true);
+                const queryParams = new URLSearchParams({
+                    propertyId,
+                    arrival: searchParams.arrival,
+                    departure: searchParams.departure,
+                    guests_adult: booking.adults.toString(),
+                    guests_children: booking.children.toString(),
+                });
+                const res = await fetch(`http://localhost:5900/v1/rooms/available?${queryParams}`);
+                const result = await res.json();
+                const fetchedRooms = result.data || [];
 
-        const nights = differenceInDays(booking.dateRange.to, booking.dateRange.from);
-        console.log("Jumlah malam (nights):", nights);
-        console.log("Tanggal check-in:", arrival);
-        console.log("Tanggal check-out:", departure);
+                setRooms(fetchedRooms);
+                setBooking(prev => ({
+                    ...prev,
+                    selectedRoom: fetchedRooms.length > 0 ? prev.selectedRoom : null
+                }));
+                setSearchDone(true);
+            } catch (err) {
+                console.error("Fetch rooms error:", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchRooms();
+    }, [searchParams, propertyId, booking.adults, booking.children]);
 
-        const queryParams = new URLSearchParams({
-            propertyId: propertyId ?? "",
-            arrival,
-            departure,
-            guests_adult: booking.adults.toString(),
-            guests_children: booking.children.toString(),
+
+
+    const handleBookNow = () => {
+        if (!booking.selectedRoom || !booking.dateRange?.from || !booking.dateRange?.to) return;
+
+        const params = new URLSearchParams({
+            roomId: booking.selectedRoom.room_id,
+            propertyId: booking.selectedRoom.propertyId ?? "",
+            adultGuest: String(booking.adults ?? 0),
+            childrenGuest: String(booking.children ?? 0),
+            nights: String(nights ?? 0),
         });
 
-        try {
-            setLoading(true);
-
-            const response = await fetch(`https://api.houseofreservations.com/v1/rooms/available?${queryParams.toString()}`);
-            const result = await response.json();
-
-            setRooms(result.data || []);
-            setLoading(false);
-
-            // Optional: update URL (history pushState)
-            const queryUrl = `${window.location.pathname}?${queryParams.toString()}`;
-            window.history.pushState({}, "", queryUrl);
-
-            console.log("Fetched rooms with:", queryParams.toString());
-        } catch (err) {
-            console.error("Error fetching rooms:", err);
-            setLoading(false);
-        }
+        window.location.href = `http://localhost:3001/en/checkout?${params.toString()}`;
     };
 
 
+
+
     return (
-        <div className="min-h-[2000px] bg-gray-50">
+        <div className=" bg-gray-50">
             {/* Header */}
             {/* <div className="bg-white shadow-sm border-b">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -279,10 +309,10 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Room Selection Section */}
                     <div className="lg:col-span-2">
-                        <div className="mb-8">
+                        {/* <div className="mb-8">
                             <h2 className="text-2xl font-bold text-gray-900 mb-2">Choose Your Villa</h2>
                             <p className="text-gray-600">Discover our handpicked collection of luxury villas in Canggu</p>
-                        </div>
+                        </div> */}
 
                         {/* Full Width Search Bar with Margins */}
                         <div className="my-3">
@@ -291,137 +321,170 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                     
                                 </CardContent>
                             </Card> */}
-                            <div className="flex flex-col sm:flex-row border rounded-lg overflow-hidden relative">
-                                {/* Date Selection */}
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant="ghost"
-                                            className="flex-1 h-auto p-6 rounded-none border-0 border-b sm:border-b-0 justify-start text-left font-normal hover:bg-gray-50"
-                                        >
-                                            <div className="flex items-center gap-4 w-full">
-                                                <Calendar className="h-5 w-5 text-gray-400" />
-                                                <div className="flex-1">
-                                                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                                                        Check-in • Check-out
+
+                            {/* Mobile Version */}
+                            <div className="lg:hidden mb-4 shadow-md">
+                                {/* Trigger Accordion */}
+                                <Button
+                                    variant="outline"
+                                    className="w-full flex justify-between items-center cursor-pointer bg-white p-8"
+                                    onClick={() => setIsOpen((prev) => !prev)}
+                                >
+                                    <span className="font-medium text-2xl">Search Villa</span>
+                                    {isOpen ? (
+                                        <ChevronDown className="h-5 w-5 text-gray-500" />
+                                    ) : (
+                                        <ChevronRight className="h-5 w-5 text-gray-500" />
+                                    )}
+                                </Button>
+
+                                {/* Accordion Content */}
+                                {isOpen && (
+                                    <div className="mt-3 flex flex-col gap-3">
+                                        {/* Date Picker */}
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button variant="outline" className="justify-start">
+                                                    <Calendar className="h-5 w-5 mr-2 text-gray-400" />
+                                                    {booking.dateRange?.from && booking.dateRange?.to
+                                                        ? `${format(booking.dateRange.from, "MMM dd")} - ${format(
+                                                            booking.dateRange.to,
+                                                            "MMM dd"
+                                                        )}`
+                                                        : "Select dates"}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-full p-0" align="start">
+                                                <CustomDatePicker
+                                                    startDate={startDate}
+                                                    endDate={endDate}
+                                                    onChange={(update) => {
+                                                        const [start, end] = update as [Date | null, Date | null];
+                                                        setDateRange([start, end]);
+                                                        setBooking((prev) => ({
+                                                            ...prev,
+                                                            dateRange: start
+                                                                ? { from: start, to: end ?? undefined }
+                                                                : undefined,
+                                                        }));
+                                                    }}
+                                                    propertyId={propertyId}
+                                                    availableDates={availableDates}
+                                                    availabilityData={availabilityData}
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
+
+                                        {/* Guests Picker */}
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button variant="outline" className="justify-start">
+                                                    <Users className="h-5 w-5 mr-2 text-gray-400" />
+                                                    {booking.adults + booking.children} guests
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent>
+                                                <div className="p-4 space-y-4">
+                                                    {/* Adults */}
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <div className="font-medium">Guests</div>
+                                                            <div className="text-sm text-gray-500">Ages 13 or above</div>
+                                                        </div>
+                                                        <div className="flex items-center gap-3">
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="h-8 w-8 p-0 bg-transparent"
+                                                                onClick={() =>
+                                                                    setBooking((prev) => ({ ...prev, adults: Math.max(1, prev.adults - 1) }))
+                                                                }
+                                                                disabled={booking.adults <= 1}
+                                                            >
+                                                                -
+                                                            </Button>
+                                                            <span className="w-8 text-center font-medium">{booking.adults}</span>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="h-8 w-8 p-0 bg-transparent"
+                                                                onClick={() =>
+                                                                    setBooking((prev) => ({ ...prev, adults: Math.min(12, prev.adults + 1) }))
+                                                                }
+                                                                disabled={booking.adults >= 12}
+                                                            >
+                                                                +
+                                                            </Button>
+                                                        </div>
                                                     </div>
-                                                    <div className="text-sm font-medium text-gray-900">
-                                                        {booking.dateRange?.from && booking.dateRange?.to
-                                                            ? `${format(booking.dateRange.from, "MMM dd")} - ${format(booking.dateRange.to, "MMM dd")}`
-                                                            : "Add dates"}
+
+                                                    {/* Children */}
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <div className="font-medium">Guests</div>
+                                                            <div className="text-sm text-gray-500">Children (below 13)</div>
+                                                        </div>
+                                                        <div className="flex items-center gap-3">
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="h-8 w-8 p-0 bg-transparent"
+                                                                onClick={() =>
+                                                                    setBooking((prev) => ({ ...prev, children: Math.max(0, prev.children - 1) }))
+                                                                }
+                                                                disabled={booking.children <= 0}
+                                                            >
+                                                                -
+                                                            </Button>
+                                                            <span className="w-8 text-center font-medium">{booking.children}</span>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="h-8 w-8 p-0 bg-transparent"
+                                                                onClick={() =>
+                                                                    setBooking((prev) => ({ ...prev, children: Math.min(12, prev.children + 1) }))
+                                                                }
+                                                                disabled={booking.children >= 12}
+                                                            >
+                                                                +
+                                                            </Button>
+                                                        </div>
                                                     </div>
+
                                                 </div>
-                                            </div>
+                                            </PopoverContent>
+                                        </Popover>
+
+                                        {/* Search Button */}
+                                        <Button
+                                            className="w-full bg-[#5c8252] hover:bg-[#8A9B7A] text-white"
+                                            onClick={handleSearchClick}
+                                        >
+                                            Search
                                         </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0" align="start">
-                                        <CalendarComponent
-                                            mode="range"
-                                            selected={booking.dateRange}
-                                            onSelect={(range) => setBooking((prev) => ({ ...prev, dateRange: range }))}
-                                            disabled={(date) => date < new Date()}
-                                            numberOfMonths={typeof window !== "undefined" && window.innerWidth >= 768 ? 2 : 1}
-                                            className="rounded-md border"
-                                        />
-                                    </PopoverContent>
-                                </Popover>
+                                    </div>
+                                )}
+
+                            </div>
+
+                            {/* Desktop Version */}
+                            <div className="hidden lg:flex flex-col sm:flex-row border rounded-lg overflow-hidden relative">
+                                {/* Date Selection */}
+                                <BookingDatePicker
+                                    booking={booking}
+                                    setBooking={setBooking}
+                                    dateRange={dateRange}
+                                    setDateRange={setDateRange}
+                                    propertyId={propertyId}
+                                    availableDates={availableDates}
+                                    availabilityData={availabilityData}
+                                />
 
                                 {/* Vertical divider */}
                                 <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 h-10 w-px bg-gray-300" />
 
                                 {/* Guests Selection */}
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant="ghost"
-                                            className="flex-1 h-auto p-6 rounded-none border-0 justify-start text-left font-normal hover:bg-gray-50 pr-16"
-                                        >
-                                            <div className="flex items-center gap-4 w-full mx-2">
-                                                <Users className="h-5 w-5 text-gray-400" />
-                                                <div className="flex-1">
-                                                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                                                        Guests
-                                                    </div>
-                                                    <div className="text-sm font-medium text-gray-900">
-                                                        {booking.adults + booking.children} guests ({booking.adults} adults, {booking.children} children)
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-80" align="start">
-                                        <div className="p-4 space-y-4">
-                                            {/* Adults */}
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <div className="font-medium">Guests</div>
-                                                    <div className="text-sm text-gray-500">Ages 13 or above</div>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="h-8 w-8 p-0 bg-transparent"
-                                                        onClick={() =>
-                                                            setBooking((prev) => ({ ...prev, adults: Math.max(1, prev.adults - 1) }))
-                                                        }
-                                                        disabled={booking.adults <= 1}
-                                                    >
-                                                        -
-                                                    </Button>
-                                                    <span className="w-8 text-center font-medium">{booking.adults}</span>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="h-8 w-8 p-0 bg-transparent"
-                                                        onClick={() =>
-                                                            setBooking((prev) => ({ ...prev, adults: Math.min(12, prev.adults + 1) }))
-                                                        }
-                                                        disabled={booking.adults >= 12}
-                                                    >
-                                                        +
-                                                    </Button>
-                                                </div>
-                                            </div>
-
-                                            {/* Children */}
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <div className="font-medium">Guests</div>
-                                                    <div className="text-sm text-gray-500">Children (below 13)</div>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="h-8 w-8 p-0 bg-transparent"
-                                                        onClick={() =>
-                                                            setBooking((prev) => ({ ...prev, children: Math.max(0, prev.children - 1) }))
-                                                        }
-                                                        disabled={booking.children <= 0}
-                                                    >
-                                                        -
-                                                    </Button>
-                                                    <span className="w-8 text-center font-medium">{booking.children}</span>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="h-8 w-8 p-0 bg-transparent"
-                                                        onClick={() =>
-                                                            setBooking((prev) => ({ ...prev, children: Math.min(12, prev.children + 1) }))
-                                                        }
-                                                        disabled={booking.children >= 12}
-                                                    >
-                                                        +
-                                                    </Button>
-                                                </div>
-                                            </div>
-
-                                        </div>
-                                    </PopoverContent>
-                                </Popover>
-
-
+                                <BookingGuests booking={booking} setBooking={setBooking} />
 
                                 {/* Search Icon - Positioned absolutely inside the search bar */}
                                 <Button
@@ -470,7 +533,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                 {rooms.map((room) => (
                                     <Card
                                         key={room.id}
-                                        className={`transition-all duration-200 hover:shadow-lg ${booking.selectedRoom?.id === room.id ? "ring-2 ring-blue-500" : ""
+                                        className={`transition-all duration-200 hover:shadow-lg ${booking.selectedRoom?.id === room.id ? "ring-2 ring-[#5c8252]" : ""
                                             }`}
                                     >
                                         <CardContent className="p-0">
@@ -518,45 +581,38 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                                 </div>
 
                                                 {/* Pricing & Selection */}
-                                                <div className="flex flex-col justify-between">
-                                                    <div className="text-right mb-4">
-                                                        <div className="flex items-center justify-end gap-2 mb-2">
-                                                            <span className="text-2xl font-bold text-gray-900">
-                                                                {formatCurrency(
-                                                                    room.totalRates
-                                                                )}
-
-                                                            </span>
-
+                                                {searchDone && (
+                                                    <div className="flex flex-col justify-between">
+                                                        <div className="text-right mb-4">
+                                                            <div className="flex items-center justify-end gap-2 mb-2">
+                                                                <span className="text-2xl font-bold text-gray-900">
+                                                                    {formatCurrency(room.totalRates)}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-sm text-gray-600">per night</p>
+                                                            {/* {room.totalNights > 0 && (
+                                                                <p className="text-sm text-gray-500">
+                                                                    Total {room.totalNights} nights: {formatCurrency(room.totalRates)}
+                                                                </p>
+                                                            )} */}
                                                         </div>
-                                                        <p className="text-sm text-gray-600">per night</p>
-                                                        {room.totalNights > 0 && (
-                                                            <p className="text-sm text-gray-500">
-                                                                Total {room.totalNights} nights:{" "}
-                                                                {formatCurrency(room.totalRates)}
-                                                            </p>
-                                                        )}
+
+                                                        <Button
+                                                            onClick={() => selectRoom(room)}
+                                                            disabled={!isBookingAllowed}
+                                                            className={`w-full ${booking.selectedRoom?.id === room.id ? "bg-green-600 hover:bg-green-700" : ""} ${!isBookingAllowed ? "opacity-50 cursor-not-allowed" : ""}`}
+                                                        >
+                                                            {booking.selectedRoom?.id === room.id ? (
+                                                                <>
+                                                                    <Check className="w-4 h-4 mr-2" />
+                                                                    Selected
+                                                                </>
+                                                            ) : (
+                                                                "Select Villa"
+                                                            )}
+                                                        </Button>
                                                     </div>
-
-                                                    <Button
-                                                        onClick={() => selectRoom(room)}
-                                                        disabled={!isBookingAllowed}
-                                                        className={`w-full ${booking.selectedRoom?.id === room.id
-                                                            ? "bg-green-600 hover:bg-green-700"
-                                                            : ""
-                                                            } ${!isBookingAllowed ? "opacity-50 cursor-not-allowed" : ""}`}
-                                                    >
-                                                        {booking.selectedRoom?.id === room.id ? (
-                                                            <>
-                                                                <Check className="w-4 h-4 mr-2" />
-                                                                Selected
-                                                            </>
-                                                        ) : (
-                                                            "Select Villa"
-                                                        )}
-                                                    </Button>
-
-                                                </div>
+                                                )}
                                             </div>
                                         </CardContent>
                                     </Card>
@@ -566,8 +622,8 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                     </div>
 
                     {/* Booking Summary */}
-                    <div className="lg:col-span-1">
-                        <div className="sticky top-4">
+                    <div ref={summaryRef} className="lg:col-span-1">
+                        <div className="h-fit sticky top-4">
                             <Card>
                                 <CardHeader>
                                     <CardTitle className="flex items-center gap-2">
@@ -581,13 +637,8 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                             {/* Selected Villa */}
                                             <div>
                                                 <h4 className="font-medium text-gray-900 mb-2">Selected Villa</h4>
-                                                <div className="bg-blue-50 rounded-lg py-3">
-                                                    <p className="font-medium ">{booking.selectedRoom.room_name}</p>
-                                                    <p className="text-sm ">
-                                                        {formatCurrency(
-                                                            booking.selectedRoom.rates
-                                                        )} per night
-                                                    </p>
+                                                <div className="bg-blue-50 rounded-lg py-3 px-4">
+                                                    <p className="font-medium">{booking.selectedRoom.room_name}</p>
                                                 </div>
                                             </div>
 
@@ -598,18 +649,26 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                                 <div className="flex justify-between text-sm">
                                                     <span className="text-gray-600">Check-in:</span>
                                                     <span className="font-medium">
-                                                        {booking.dateRange?.from ? format(booking.dateRange.from, "MMM dd, yyyy") : "Not selected"}
+                                                        {booking.dateRange?.from
+                                                            ? format(booking.dateRange.from, "MMM dd, yyyy")
+                                                            : "Not selected"}
                                                     </span>
                                                 </div>
                                                 <div className="flex justify-between text-sm">
                                                     <span className="text-gray-600">Check-out:</span>
                                                     <span className="font-medium">
-                                                        {booking.dateRange?.to ? format(booking.dateRange.to, "MMM dd, yyyy") : "Not selected"}
+                                                        {booking.dateRange?.to
+                                                            ? format(booking.dateRange.to, "MMM dd, yyyy")
+                                                            : "Not selected"}
                                                     </span>
                                                 </div>
                                                 <div className="flex justify-between text-sm">
-                                                    <span className="text-gray-600">Guests:</span>
-                                                    <span className="font-medium">{totalGuests}</span>
+                                                    <span className="text-gray-600">Adults:</span>
+                                                    <span className="font-medium">{booking.adults ?? 0}</span>
+                                                </div>
+                                                <div className="flex justify-between text-sm">
+                                                    <span className="text-gray-600">Children:</span>
+                                                    <span className="font-medium">{booking.children ?? 0}</span>
                                                 </div>
                                                 {nights > 0 && (
                                                     <div className="flex justify-between text-sm">
@@ -619,74 +678,39 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                                 )}
                                             </div>
 
-                                            <Separator />
-
-                                            {/* Price Breakdown */}
-                                            {nights > 0 && (
-                                                <div className="space-y-2">
-                                                    <div className="flex justify-between text-sm">
-                                                        <span className="text-gray-600">
-                                                            {formatCurrency(
-                                                                booking.selectedRoom.rates
-                                                            )}  × {nights} nights
-                                                        </span>
-                                                        <span className="font-medium">
-                                                            {formatCurrency(
-                                                                totalPrice
-                                                            )}
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex justify-between text-sm">
-                                                        <span className="text-gray-600">Taxes & fees</span>
-                                                        <span className="font-medium">${Math.round(totalPrice * 0.12)}</span>
-                                                    </div>
-                                                    <Separator />
-                                                    <div className="flex justify-between text-lg font-bold">
-                                                        <span>Total</span>
-                                                        <span>${totalPrice + Math.round(totalPrice * 0.12)}</span>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Book Button */}
+                                            {/* Book Now Button */}
                                             <Button
                                                 className="w-full mt-6"
                                                 size="lg"
-                                                onClick={handleBooking}
+                                                onClick={handleBookNow}
                                                 disabled={!booking.dateRange?.from || !booking.dateRange?.to}
                                             >
-                                                {!booking.dateRange?.from || !booking.dateRange?.to
-                                                    ? "Select Dates to Book"
-                                                    : `Book for $${totalPrice + Math.round(totalPrice * 0.12)}`}
+                                                Book Now
                                             </Button>
-
-                                            {/* Features */}
-                                            <div className="mt-4 space-y-2">
-                                                <div className="flex items-center gap-2 text-sm text-gray-600">
-                                                    <Check className="w-4 h-4 text-green-500" />
-                                                    Free cancellation within 24 hours
-                                                </div>
-                                                <div className="flex items-center gap-2 text-sm text-gray-600">
-                                                    <Check className="w-4 h-4 text-green-500" />
-                                                    No booking fees
-                                                </div>
-                                                <div className="flex items-center gap-2 text-sm text-gray-600">
-                                                    <Check className="w-4 h-4 text-green-500" />
-                                                    Instant confirmation
-                                                </div>
-                                            </div>
                                         </div>
                                     ) : (
-                                        <div className="text-center py-8">
-                                            <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                                            <p className="text-gray-500 mb-2">Select a villa to see booking details</p>
-                                            <p className="text-sm text-gray-400">Choose your preferred villa from the options above</p>
-                                        </div>
+                                            <p className="text-gray-500 text-sm">No villa selected</p>
                                     )}
                                 </CardContent>
                             </Card>
                         </div>
                     </div>
+                    {/* Mobile Sticky Booking Summary */}
+                    {showSticky && (
+                        <div className="lg:hidden fixed bottom-0 left-0 w-full z-50 bg-white shadow-md border-t p-4 flex items-center justify-between">
+                            <div className="flex-1">
+                                <p className="font-medium text-gray-900 truncate">{booking.selectedRoom?.room_name}</p>
+                            </div>
+                            <Button
+                                size="sm"
+                                className="ml-4 bg-green-600 hover:bg-green-700"
+                                onClick={handleBookNow}
+                                disabled={!booking.dateRange?.from || !booking.dateRange?.to}
+                            >
+                                Book Now
+                            </Button>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
