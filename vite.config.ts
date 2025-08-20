@@ -44,7 +44,7 @@ export default defineConfig(({ mode }) => {
 
     server: {
       open: true,
-      port: 3000,
+      port: 5000,
       historyApiFallback: true, // agar routing SPA tetap jalan
     },
   };

@@ -156,7 +156,10 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
         const fetchAvailability = async () => {
             try {
                 setLoading(true);
-                const url = `http://localhost:5900/v1/properties/${propertyId}/availability`;
+                // const url = `http://localhost:5900/v1/properties/${propertyId}/availability`;
+
+                // for testing live
+                const url = `https://api.houseofreservations.com/v1/properties/${propertyId}/availability`;
                 const res = await fetch(url);
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data: PropertyAvailabilityResponse = await res.json();
@@ -190,7 +193,19 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
 
         setLoading(true)
 
-        fetch(`http://localhost:5900/v1/rooms/available?${query.toString()}`)
+        // fetch(`http://localhost:5900/v1/rooms/available?${query.toString()}`)
+        //     .then((res) => res.json())
+        //     .then((data) => {
+        //         setRooms(data.data || [])
+        //         setLoading(false)
+        //     })
+        //     .catch((err) => {
+        //         console.error('Error fetching rooms:', err)
+        //         setLoading(false)
+        //     })
+
+        // For testing live
+        fetch(`https://api.houseofreservations.com/v1/rooms/available?${query.toString()}`)
             .then((res) => res.json())
             .then((data) => {
                 setRooms(data.data || [])
@@ -200,7 +215,6 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                 console.error('Error fetching rooms:', err)
                 setLoading(false)
             })
-
 
     }, [propertyId])
 
@@ -243,7 +257,10 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                     guests_adult: booking.adults.toString(),
                     guests_children: booking.children.toString(),
                 });
-                const res = await fetch(`http://localhost:5900/v1/rooms/available?${queryParams}`);
+                // const res = await fetch(`http://localhost:5900/v1/rooms/available?${queryParams}`);
+
+                // Test for live
+                const res = await fetch(`https://api.houseofreservations.com/v1/rooms/available?${queryParams}`);
                 const result = await res.json();
                 const fetchedRooms = result.data || [];
 
@@ -262,20 +279,21 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
         fetchRooms();
     }, [searchParams, propertyId, booking.adults, booking.children]);
 
-
+    const slug = booking.selectedRoom?.urlslug
+    console.log(`slug : ${slug}`);
 
     const handleBookNow = () => {
         if (!booking.selectedRoom || !booking.dateRange?.from || !booking.dateRange?.to) return;
 
         const params = new URLSearchParams({
-            roomId: booking.selectedRoom.room_id,
-            propertyId: booking.selectedRoom.propertyId ?? "",
-            adultGuest: String(booking.adults ?? 0),
-            childrenGuest: String(booking.children ?? 0),
-            nights: String(nights ?? 0),
+            slug: booking.selectedRoom.urlslug ?? "",
+            arrival: format(booking.dateRange.from, "yyyy-MM-dd"),
+            departure: format(booking.dateRange.to, "yyyy-MM-dd"),
+            adults: String(booking.adults ?? 0),
+            children: String(booking.children ?? 0),
         });
 
-        window.location.href = `http://localhost:3001/en/checkout?${params.toString()}`;
+        window.location.href = `http://localhost:3000/en/checkout-widget?${params.toString()}`;
     };
 
 
@@ -309,21 +327,14 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Room Selection Section */}
                     <div className="lg:col-span-2">
-                        {/* <div className="mb-8">
-                            <h2 className="text-2xl font-bold text-gray-900 mb-2">Choose Your Villa</h2>
-                            <p className="text-gray-600">Discover our handpicked collection of luxury villas in Canggu</p>
-                        </div> */}
+
 
                         {/* Full Width Search Bar with Margins */}
                         <div className="my-3">
-                            {/* <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
-                                <CardContent className="p-0">
-                                    
-                                </CardContent>
-                            </Card> */}
+
 
                             {/* Mobile Version */}
-                            <div className="lg:hidden mb-4 shadow-md">
+                            <div className="lg:hidden mb-4 bg-white shadow-md p-2  ">
                                 {/* Trigger Accordion */}
                                 <Button
                                     variant="outline"
@@ -344,7 +355,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                         {/* Date Picker */}
                                         <Popover>
                                             <PopoverTrigger asChild>
-                                                <Button variant="outline" className="justify-start">
+                                                <Button variant="ghost" className="justify-start">
                                                     <Calendar className="h-5 w-5 mr-2 text-gray-400" />
                                                     {booking.dateRange?.from && booking.dateRange?.to
                                                         ? `${format(booking.dateRange.from, "MMM dd")} - ${format(
@@ -378,12 +389,12 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                         {/* Guests Picker */}
                                         <Popover>
                                             <PopoverTrigger asChild>
-                                                <Button variant="outline" className="justify-start">
+                                                <Button variant="ghost" className="justify-start">
                                                     <Users className="h-5 w-5 mr-2 text-gray-400" />
                                                     {booking.adults + booking.children} guests
                                                 </Button>
                                             </PopoverTrigger>
-                                            <PopoverContent>
+                                            <PopoverContent align="start">
                                                 <div className="p-4 space-y-4">
                                                     {/* Adults */}
                                                     <div className="flex items-center justify-between">
@@ -590,11 +601,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                                                 </span>
                                                             </div>
                                                             <p className="text-sm text-gray-600">per night</p>
-                                                            {/* {room.totalNights > 0 && (
-                                                                <p className="text-sm text-gray-500">
-                                                                    Total {room.totalNights} nights: {formatCurrency(room.totalRates)}
-                                                                </p>
-                                                            )} */}
+
                                                         </div>
 
                                                         <Button
@@ -613,6 +620,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                                         </Button>
                                                     </div>
                                                 )}
+
                                             </div>
                                         </CardContent>
                                     </Card>
@@ -676,6 +684,11 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                                         <span className="font-medium">{nights}</span>
                                                     </div>
                                                 )}
+
+                                                {/* Notice about pricing */}
+                                                <p className="text-xs text-red-400 italic mt-2 text-left">
+                                                    The final price, will be shown at checkout page.
+                                                </p>
                                             </div>
 
                                             {/* Book Now Button */}
@@ -685,7 +698,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                                 onClick={handleBookNow}
                                                 disabled={!booking.dateRange?.from || !booking.dateRange?.to}
                                             >
-                                                Book Now
+                                                Checkout
                                             </Button>
                                         </div>
                                     ) : (
@@ -700,14 +713,19 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                         <div className="lg:hidden fixed bottom-0 left-0 w-full z-50 bg-white shadow-md border-t p-4 flex items-center justify-between">
                             <div className="flex-1">
                                 <p className="font-medium text-gray-900 truncate">{booking.selectedRoom?.room_name}</p>
+                                <p className=" text-xs text-red-400 italic mt-1  text-left">
+                                    The final price, including fees and discounts, will be shown at checkout page.
+                                </p>
+
                             </div>
+
                             <Button
                                 size="sm"
-                                className="ml-4 bg-green-600 hover:bg-green-700"
+                                className="ml-4 bg-[#5c8252] hover:bg-[#8A9B7A]"
                                 onClick={handleBookNow}
                                 disabled={!booking.dateRange?.from || !booking.dateRange?.to}
                             >
-                                Book Now
+                                Checkout
                             </Button>
                         </div>
                     )}
