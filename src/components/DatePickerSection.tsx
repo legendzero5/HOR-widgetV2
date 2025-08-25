@@ -11,7 +11,7 @@ interface BookingDatePickerProps {
     dateRange: DateForRange;
     setDateRange: React.Dispatch<React.SetStateAction<DateForRange>>;
     propertyId?: string | null;
-    availableDates: Date[];
+    // availableDates: Date[];
     availabilityData: RawPropertyAvailability[];
 }
 
@@ -21,7 +21,7 @@ export default function BookingDatePicker({
     dateRange,
     setDateRange,
     propertyId,
-    availableDates,
+    // availableDates,
     availabilityData
 }: BookingDatePickerProps) {
     const [startDate, endDate] = dateRange;
@@ -62,7 +62,7 @@ export default function BookingDatePicker({
                         }));
                     }}
                     propertyId={propertyId}
-                    availableDates={availableDates}
+                    // availableDates={availableDates}
                     availabilityData={availabilityData}
                 />
             </PopoverContent>

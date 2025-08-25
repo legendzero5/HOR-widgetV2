@@ -1,5 +1,48 @@
 import type { DateRange } from "react-day-picker";
-interface Rooms {
+
+export interface BookingData {
+    dateRange: DateRange | undefined;
+    adults: number; // usia 13+
+    children: number; // usia <13
+    rooms: number;
+    selectedRoom: Rooms | null;
+}
+
+export interface RawPropertyAvailability {
+    date: string;
+    numAvail: number;
+    minStay: number;
+    maxStay: number;
+    price: number;
+    override: string;
+}
+
+export interface PropertyAvailabilityResponse {
+    availability: RawPropertyAvailability[];
+}
+
+export interface BookingDatePickerProps {
+    booking: BookingData;
+    setBooking: React.Dispatch<React.SetStateAction<BookingData>>;
+    dateRange: DateForRange;
+    setDateRange: React.Dispatch<React.SetStateAction<DateForRange>>;
+    propertyId?: string | null;
+    availableDates: Date[];
+    availabilityData: RawPropertyAvailability[];
+    startDate: Date | null;
+    endDate: Date | null;
+    onChange: (dates: [Date | null, Date | null]) => void;
+}
+
+//  ============== Date Picker Types ===============
+// export interface DateRange {
+//     from: Date | undefined;
+//     to: Date | undefined;
+// }
+
+
+// =============== Booking Types ====================
+export interface Rooms {
     id: number
     room_id: string
     room_name: string
@@ -32,40 +75,24 @@ interface Rooms {
         coverImage: string
         published: boolean
     }
-}
+    // room_availability?: { date: string }[]
 
+}
 export interface BookingData {
-    dateRange: DateRange | undefined;
-    adults: number; // usia 13+
-    children: number; // usia <13
-    rooms: number;
-    selectedRoom: Rooms | null;
+    dateRange: DateRange | undefined
+    adults: number // usia 13+
+    children: number // usia <13
+    rooms: number
+    selectedRoom: Rooms | null
 }
 
 export type DateForRange = [Date | null, Date | null];
-
-export interface RawPropertyAvailability {
-    date: string;
-    numAvail: number;
-    minStay: number;
-    maxStay: number;
-    price: number;
-    override: string;
-}
 
 export interface PropertyAvailabilityResponse {
     availability: RawPropertyAvailability[];
 }
 
-export interface BookingDatePickerProps {
-    booking: BookingData;
-    setBooking: React.Dispatch<React.SetStateAction<BookingData>>;
-    dateRange: DateForRange;
-    setDateRange: React.Dispatch<React.SetStateAction<DateForRange>>;
-    propertyId?: string | null;
-    availableDates: Date[];
-    availabilityData: RawPropertyAvailability[];
-    startDate: Date | null;
-    endDate: Date | null;
-    onChange: (dates: [Date | null, Date | null]) => void;
+export interface RawPropertyAvailability {
+    date: string;
+    numAvail: number;
 }

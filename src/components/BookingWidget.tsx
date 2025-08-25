@@ -7,61 +7,12 @@ import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Separator } from "@/components/ui/separator"
 import { format, differenceInDays, addDays } from "date-fns"
-import type { DateRange } from "react-day-picker"
 import "react-datepicker/dist/react-datepicker.css"
 import CustomDatePicker from "./CustomDatePicker"
 import BookingGuests from "./GuestPickerSection"
 import BookingDatePicker from "./DatePickerSection"
-import type { PropertyAvailabilityResponse, RawPropertyAvailability } from "@/types/types"
+import type { BookingData, DateForRange, PropertyAvailabilityResponse, RawPropertyAvailability, Rooms } from "@/types/types"
 // import { useAvailableRooms } from "@/lib/useAvailableRooms"
-
-interface Rooms {
-    id: number
-    room_id: string
-    room_name: string
-    qty: number
-    propertyId: string
-    descriptions: string
-    featured: boolean
-    num_baths: number
-    num_bedrooms: number
-    num_beds: number
-    num_guests: number
-    type: number
-    status: boolean
-    urlslug: string
-    rates: number
-    totalRates: number
-    totalNights: number
-    images: {
-        id: number
-        roomId: number
-        url: string
-        order: number
-    }[]
-    property: {
-        name: string
-        number_of_units: number
-        address: string
-        city: string
-        country: string
-        coverImage: string
-        published: boolean
-    }
-    // room_availability?: { date: string }[]
-
-}
-export interface BookingData {
-    dateRange: DateRange | undefined
-    adults: number // usia 13+
-    children: number // usia <13
-    rooms: number
-    selectedRoom: Rooms | null
-}
-
-export type DateForRange = [Date | null, Date | null];
-
-
 
 export default function BookingWidget({ propertyId }: { propertyId: string | null }) {
     const [booking, setBooking] = useState<BookingData>({
@@ -77,11 +28,9 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
 
     const [dateRange, setDateRange] = useState<DateForRange>([null, null]);
     const [startDate, endDate] = dateRange;
-    const [isOpen, setIsOpen] = useState(true); // untuk hamburger menu
+    const [isOpen, setIsOpen] = useState(true); 
     const [searchDone, setSearchDone] = useState(false);
     const [rooms, setRooms] = useState<Rooms[]>([])
-    // const [filteredRooms, setFilteredRooms] = useState<Rooms[]>([]);
-    const [availableDates, setAvailableDates] = useState<Date[]>([]);
     const [availabilityData, setAvailabilityData] = useState<RawPropertyAvailability[]>([]);
     const [loading, setLoading] = useState(true);
     const [showSticky, setShowSticky] = useState(false);
@@ -131,7 +80,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
     };
 
     const [nights, setNights] = useState(0)
-    // const [totalPrice, setTotalPrice] = useState(0)
+    const [totalPrice, setTotalPrice] = useState(0)
 
     const selectRoom = (room: Rooms) => {
         setBooking((prev) => ({
@@ -156,20 +105,15 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
         const fetchAvailability = async () => {
             try {
                 setLoading(true);
-                // const url = `http://localhost:5900/v1/properties/${propertyId}/availability`;
+                const url = `http://localhost:5900/v1/properties/${propertyId}/availability`;
 
                 // for testing live
-                const url = `https://api.houseofreservations.com/v1/properties/${propertyId}/availability`;
+                // const url = `https://api.houseofreservations.com/v1/properties/${propertyId}/availability`;
                 const res = await fetch(url);
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data: PropertyAvailabilityResponse = await res.json();
 
                 setAvailabilityData(data.availability);
-                setAvailableDates(
-                    data.availability
-                        .filter(item => item.numAvail > 0)
-                        .map(item => new Date(item.date))
-                );
             } catch (err) {
                 console.error("Fetch availability error:", err);
             } finally {
@@ -193,19 +137,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
 
         setLoading(true)
 
-        // fetch(`http://localhost:5900/v1/rooms/available?${query.toString()}`)
-        //     .then((res) => res.json())
-        //     .then((data) => {
-        //         setRooms(data.data || [])
-        //         setLoading(false)
-        //     })
-        //     .catch((err) => {
-        //         console.error('Error fetching rooms:', err)
-        //         setLoading(false)
-        //     })
-
-        // For testing live
-        fetch(`https://api.houseofreservations.com/v1/rooms/available?${query.toString()}`)
+        fetch(`http://localhost:5900/v1/rooms/available?${query.toString()}`)
             .then((res) => res.json())
             .then((data) => {
                 setRooms(data.data || [])
@@ -216,19 +148,34 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                 setLoading(false)
             })
 
-    }, [propertyId])
+        // For testing live
+        // fetch(`https://api.houseofreservations.com/v1/rooms/available?${query.toString()}`)
+        //     .then((res) => res.json())
+        //     .then((data) => {
+        //         setRooms(data.data || [])
+        //         setLoading(false)
+        //     })
+        //     .catch((err) => {
+        //         console.error('Error fetching rooms:', err)
+        //         setLoading(false)
+        //     })
 
+    }, [propertyId])
     // Calculate nights and total price when dates change
     useEffect(() => {
         if (booking.dateRange?.from && booking.dateRange?.to && booking.selectedRoom) {
             const nightsCount = differenceInDays(booking.dateRange.to, booking.dateRange.from)
+            const pricePerNight = booking.selectedRoom.totalRates / booking.selectedRoom.totalNights
+
             setNights(nightsCount)
-            // setTotalPrice(nightsCount * booking.selectedRoom.rates * booking.rooms)
+            setTotalPrice(nightsCount * pricePerNight)
         } else {
             setNights(0)
-            // setTotalPrice(0)
+            setTotalPrice(0)
         }
     }, [booking.dateRange, booking.selectedRoom, booking.rooms])
+
+
 
 
     // Click handler ringan
@@ -257,10 +204,10 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                     guests_adult: booking.adults.toString(),
                     guests_children: booking.children.toString(),
                 });
-                // const res = await fetch(`http://localhost:5900/v1/rooms/available?${queryParams}`);
+                const res = await fetch(`http://localhost:5900/v1/rooms/available?${queryParams}`);
 
                 // Test for live
-                const res = await fetch(`https://api.houseofreservations.com/v1/rooms/available?${queryParams}`);
+                // const res = await fetch(`https://api.houseofreservations.com/v1/rooms/available?${queryParams}`);
                 const result = await res.json();
                 const fetchedRooms = result.data || [];
 
@@ -279,9 +226,6 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
         fetchRooms();
     }, [searchParams, propertyId, booking.adults, booking.children]);
 
-    const slug = booking.selectedRoom?.urlslug
-    console.log(`slug : ${slug}`);
-
     const handleBookNow = () => {
         if (!booking.selectedRoom || !booking.dateRange?.from || !booking.dateRange?.to) return;
 
@@ -293,45 +237,18 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
             children: String(booking.children ?? 0),
         });
 
-        window.location.href = `http://localhost:3000/en/checkout-widget?${params.toString()}`;
+        window.location.href = `http://localhost:3000/en/checkout-booking-engine?${params.toString()}`;
     };
-
-
-
 
     return (
         <div className=" bg-gray-50">
-            {/* Header */}
-            {/* <div className="bg-white shadow-sm border-b">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-900">Canggu Villa Rentals</h1>
-                            <div className="flex items-center gap-2 text-gray-600 mt-1">
-                                <MapPin className="w-4 h-4" />
-                                <span className="text-sm">Canggu, Bali</span>
-                            </div>
-                        </div>
-                        <div className="hidden sm:flex items-center gap-2">
-                            <div className="flex items-center gap-1">
-                                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                                <span className="font-medium">4.9</span>
-                            </div>
-                            <span className="text-gray-600 text-sm">(1,847 reviews)</span>
-                        </div>
-                    </div>
-                </div>
-            </div> */}
-
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Room Selection Section */}
                     <div className="lg:col-span-2">
 
-
                         {/* Full Width Search Bar with Margins */}
                         <div className="my-3">
-
 
                             {/* Mobile Version */}
                             <div className="lg:hidden mb-4 bg-white shadow-md p-2  ">
@@ -355,7 +272,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                         {/* Date Picker */}
                                         <Popover>
                                             <PopoverTrigger asChild>
-                                                <Button variant="ghost" className="justify-start">
+                                                <Button variant="ghost" className="justify-start cursor-pointer">
                                                     <Calendar className="h-5 w-5 mr-2 text-gray-400" />
                                                     {booking.dateRange?.from && booking.dateRange?.to
                                                         ? `${format(booking.dateRange.from, "MMM dd")} - ${format(
@@ -380,7 +297,6 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                                         }));
                                                     }}
                                                     propertyId={propertyId}
-                                                    availableDates={availableDates}
                                                     availabilityData={availabilityData}
                                                 />
                                             </PopoverContent>
@@ -389,7 +305,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                         {/* Guests Picker */}
                                         <Popover>
                                             <PopoverTrigger asChild>
-                                                <Button variant="ghost" className="justify-start">
+                                                <Button variant="ghost" className="justify-start cursor-pointer">
                                                     <Users className="h-5 w-5 mr-2 text-gray-400" />
                                                     {booking.adults + booking.children} guests
                                                 </Button>
@@ -406,7 +322,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                                             <Button
                                                                 variant="outline"
                                                                 size="sm"
-                                                                className="h-8 w-8 p-0 bg-transparent"
+                                                                className="h-8 w-8 p-0 bg-transparent cursor-pointer"
                                                                 onClick={() =>
                                                                     setBooking((prev) => ({ ...prev, adults: Math.max(1, prev.adults - 1) }))
                                                                 }
@@ -418,7 +334,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                                             <Button
                                                                 variant="outline"
                                                                 size="sm"
-                                                                className="h-8 w-8 p-0 bg-transparent"
+                                                                className="h-8 w-8 p-0 bg-transparent cursor-pointer"
                                                                 onClick={() =>
                                                                     setBooking((prev) => ({ ...prev, adults: Math.min(12, prev.adults + 1) }))
                                                                 }
@@ -439,7 +355,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                                             <Button
                                                                 variant="outline"
                                                                 size="sm"
-                                                                className="h-8 w-8 p-0 bg-transparent"
+                                                                className="h-8 w-8 p-0 bg-transparent cursor-pointer"
                                                                 onClick={() =>
                                                                     setBooking((prev) => ({ ...prev, children: Math.max(0, prev.children - 1) }))
                                                                 }
@@ -451,7 +367,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                                             <Button
                                                                 variant="outline"
                                                                 size="sm"
-                                                                className="h-8 w-8 p-0 bg-transparent"
+                                                                className="h-8 w-8 p-0 bg-transparent cursor-pointer"
                                                                 onClick={() =>
                                                                     setBooking((prev) => ({ ...prev, children: Math.min(12, prev.children + 1) }))
                                                                 }
@@ -468,7 +384,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
 
                                         {/* Search Button */}
                                         <Button
-                                            className="w-full bg-[#5c8252] hover:bg-[#8A9B7A] text-white"
+                                            className="w-full bg-[#5c8252] hover:bg-[#8A9B7A] text-white cursor-pointer"
                                             onClick={handleSearchClick}
                                         >
                                             Search
@@ -487,7 +403,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                     dateRange={dateRange}
                                     setDateRange={setDateRange}
                                     propertyId={propertyId}
-                                    availableDates={availableDates}
+                                    // availableDates={availableDates}
                                     availabilityData={availabilityData}
                                 />
 
@@ -500,7 +416,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                 {/* Search Icon - Positioned absolutely inside the search bar */}
                                 <Button
                                     onClick={() => handleSearchClick()}
-                                    className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-[#5c8252] hover:bg-[#8A9B7A] text-white rounded-full p-3 h-12 w-12 flex items-center justify-center transition-colors duration-200 shadow-sm"
+                                    className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-[#5c8252] hover:bg-[#8A9B7A] text-white rounded-full p-3 h-12 w-12 flex items-center justify-center transition-colors duration-200 shadow-sm cursor-pointer"
                                 >
                                     <svg
                                         className="h-5 w-5"
@@ -597,7 +513,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                                         <div className="text-right mb-4">
                                                             <div className="flex items-center justify-end gap-2 mb-2">
                                                                 <span className="text-2xl font-bold text-gray-900">
-                                                                    {formatCurrency(room.totalRates)}
+                                                                    {formatCurrency((room.totalRates) / (room.totalNights))}
                                                                 </span>
                                                             </div>
                                                             <p className="text-sm text-gray-600">per night</p>
@@ -607,7 +523,7 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                                         <Button
                                                             onClick={() => selectRoom(room)}
                                                             disabled={!isBookingAllowed}
-                                                            className={`w-full ${booking.selectedRoom?.id === room.id ? "bg-green-600 hover:bg-green-700" : ""} ${!isBookingAllowed ? "opacity-50 cursor-not-allowed" : ""}`}
+                                                            className={`w-full cursor-pointer ${booking.selectedRoom?.id === room.id ? "bg-green-600 hover:bg-green-700" : ""} ${!isBookingAllowed ? "opacity-50 cursor-not-allowed" : ""}`}
                                                         >
                                                             {booking.selectedRoom?.id === room.id ? (
                                                                 <>
@@ -644,9 +560,21 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                         <div className="space-y-4">
                                             {/* Selected Villa */}
                                             <div>
-                                                <h4 className="font-medium text-gray-900 mb-2">Selected Villa</h4>
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <h4 className="font-medium text-gray-900">Selected Villa</h4>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="text-red-500 hover:text-red-600 cursor-pointer"
+                                                        onClick={() => setBooking(prev => ({ ...prev, selectedRoom: null }))}
+                                                    >
+                                                        Cancel
+                                                    </Button>
+                                                </div>
+
                                                 <div className="bg-blue-50 rounded-lg py-3 px-4">
                                                     <p className="font-medium">{booking.selectedRoom.room_name}</p>
+
                                                 </div>
                                             </div>
 
@@ -671,13 +599,14 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                                     </span>
                                                 </div>
                                                 <div className="flex justify-between text-sm">
-                                                    <span className="text-gray-600">Adults:</span>
-                                                    <span className="font-medium">{booking.adults ?? 0}</span>
+                                                    <span className="text-gray-600">Guests:</span>
+                                                    <span className="font-medium">
+                                                        {`${booking.adults} Adult${booking.adults > 1 ? "s" : ""}`}
+                                                        {booking.children > 0 &&
+                                                            `, ${booking.children} Child${booking.children > 1 ? "ren" : ""}`}
+                                                    </span>
                                                 </div>
-                                                <div className="flex justify-between text-sm">
-                                                    <span className="text-gray-600">Children:</span>
-                                                    <span className="font-medium">{booking.children ?? 0}</span>
-                                                </div>
+
                                                 {nights > 0 && (
                                                     <div className="flex justify-between text-sm">
                                                         <span className="text-gray-600">Nights:</span>
@@ -685,15 +614,20 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                                                     </div>
                                                 )}
 
+                                                <div className="flex justify-between text-sm">
+                                                    <span className="text-gray-600">Total Price:</span>
+                                                    <span className="font-medium">{formatCurrency(totalPrice)} for {nights} nights</span>
+                                                </div>
+
                                                 {/* Notice about pricing */}
                                                 <p className="text-xs text-red-400 italic mt-2 text-left">
-                                                    The final price, will be shown at checkout page.
+                                                    The final price will be shown at checkout page.
                                                 </p>
                                             </div>
 
                                             {/* Book Now Button */}
                                             <Button
-                                                className="w-full mt-6"
+                                                className="w-full mt-6 cursor-pointer"
                                                 size="lg"
                                                 onClick={handleBookNow}
                                                 disabled={!booking.dateRange?.from || !booking.dateRange?.to}
@@ -711,17 +645,18 @@ export default function BookingWidget({ propertyId }: { propertyId: string | nul
                     {/* Mobile Sticky Booking Summary */}
                     {showSticky && (
                         <div className="lg:hidden fixed bottom-0 left-0 w-full z-50 bg-white shadow-md border-t p-4 flex items-center justify-between">
-                            <div className="flex-1">
-                                <p className="font-medium text-gray-900 truncate">{booking.selectedRoom?.room_name}</p>
+                            <div className="flex-1 justify-between">
+                                <p className="font-medium text-xl underline mb-1">{formatCurrency(totalPrice)} for {nights} nights</p>
+                                <p className="font-medium text-gray-900 truncate">{booking.selectedRoom?.room_name} </p>
                                 <p className=" text-xs text-red-400 italic mt-1  text-left">
-                                    The final price, including fees and discounts, will be shown at checkout page.
+                                    The final price will be shown at checkout page.
                                 </p>
 
                             </div>
 
                             <Button
                                 size="sm"
-                                className="ml-4 bg-[#5c8252] hover:bg-[#8A9B7A]"
+                                className="ml-4 cursor-pointer w-[150px] h-[50px] bg-[#5c8252] hover:bg-[#8A9B7A]"
                                 onClick={handleBookNow}
                                 disabled={!booking.dateRange?.from || !booking.dateRange?.to}
                             >
